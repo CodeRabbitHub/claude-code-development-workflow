@@ -1,0 +1,44 @@
+{
+  "_comment": "Single source of truth for the machinery. Hooks and CI read this file; nothing hardcodes a command. Keep the Commands section of CLAUDE.md in sync BY POINTING AT THIS FILE, not by copying it.",
+
+  "test_command": ["python3", "-m", "unittest", "discover", "tests", "-v"],
+  "test_timeout_seconds": 300,
+  "tests_dir": "tests",
+
+  "eval_command": null,
+  "_eval_comment": "Set once evals/ has a runner, e.g. [\"python3\", \"evals/run.py\"]. When set, stop_verify and Gate 2 check 3 run it too, and a regression blocks the merge.",
+
+  "max_attempts": 3,
+
+  "diff_cap": {
+    "lines": 400,
+    "files": 8,
+    "_comment": "Gate 2 check 1 is now mechanical. Over cap = split the slice."
+  },
+
+  "protected": {
+    "frozen_after_create": ["tests/"],
+    "_frozen_comment": "New files may be created here (test-writer at step 4). Existing files may NOT be edited or overwritten - that is the builder bending the test to fit the code.",
+    "always": [
+      ".claude/hooks/",
+      ".claude/settings.json",
+      ".claude/config.json",
+      ".github/",
+      ".env"
+    ],
+    "_always_comment": "The governor may not edit itself. .github/ is here because CI is the only check that runs outside the agent's reach - an agent that can rewrite the workflow can delete its own gate. It also becomes an exfiltration path the moment a repo secret exists (e.g. ANTHROPIC_API_KEY for evals): the workflow runs on GitHub's runner, where danger_block cannot see it.",
+    "unlock_file": ".claude/.unlock",
+    "_unlock_comment": "To amend a frozen test: human runs `touch .claude/.unlock` (or writes a path prefix into it), agent makes the change, hook consumes and deletes the unlock. Every unlock is logged to .claude/.events.log and must be named in the slice log."
+  },
+
+  "notify": {
+    "enabled": true,
+    "heartbeat_seconds": 900,
+    "_channels_comment": "Set whichever env vars you use. NTFY_TOPIC is the zero-setup mobile option: pick a hard-to-guess topic, install the ntfy app, subscribe. NOTIFY_WEBHOOK takes a generic JSON POST (Slack, Discord, Telegram bot relay).",
+    "ntfy_topic_env": "NTFY_TOPIC",
+    "ntfy_server": "https://ntfy.sh",
+    "webhook_env": "NOTIFY_WEBHOOK",
+    "levels_that_push": ["gate", "breaker", "blocked", "stopped", "dead"],
+    "_levels_comment": "Everything else lands in .claude/.events.log only, for the morning digest."
+  }
+}

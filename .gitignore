@@ -1,0 +1,17 @@
+__pycache__/
+*.pyc
+.env
+
+# Hook state. v1's stop_verify docstring CLAIMED these were gitignored;
+# they were not, so breaker state got committed and travelled across
+# branches and machines - a slice could inherit a "needs re-plan" flag
+# from an unrelated one.
+.claude/.stop_attempts
+.claude/.replan_needed
+.claude/.heartbeat
+.claude/.events.log
+.claude/.unlock
+.claude/.last_capture
+
+# Mechanical pre-fill for /capture; the real log is committed.
+plans/logs/_auto-capture.md

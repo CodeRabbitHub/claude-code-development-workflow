@@ -1,0 +1,55 @@
+{
+  "_comment": "python3, not python. macOS has shipped no `python` since 12.3 and most modern Linux distros ship none either; command-not-found returns 127, which is not 2, so EVERY hook silently no-ops and the transcript looks identical to enforcement working. That single word was the difference between a governed agent and an ungoverned one.",
+
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash|PowerShell",
+        "hooks": [
+          { "type": "command", "command": "python3 .claude/hooks/danger_block.py" }
+        ]
+      },
+      {
+        "_comment": "The hole in v1: enforcement covered Bash only, so the agent could edit its own tests to make them pass, and edit its own hooks to stop being governed.",
+        "matcher": "Write|Edit|MultiEdit|NotebookEdit",
+        "hooks": [
+          { "type": "command", "command": "python3 .claude/hooks/guard_writes.py" }
+        ]
+      }
+    ],
+
+    "PostToolUse": [
+      {
+        "matcher": "Bash|PowerShell",
+        "hooks": [
+          { "type": "command", "command": "python3 .claude/hooks/capture_commit.py" }
+        ]
+      }
+    ],
+
+    "Stop": [
+      {
+        "hooks": [
+          { "type": "command", "command": "python3 .claude/hooks/stop_verify.py" }
+        ]
+      }
+    ],
+
+    "Notification": [
+      {
+        "_comment": "Fires when the agent needs permission or input. This is the gate reaching your phone at 3am instead of the run idling until morning.",
+        "hooks": [
+          { "type": "command", "command": "python3 .claude/hooks/notify_gate.py" }
+        ]
+      }
+    ],
+
+    "SessionStart": [
+      {
+        "hooks": [
+          { "type": "command", "command": "python3 .claude/hooks/session_start.py" }
+        ]
+      }
+    ]
+  }
+}

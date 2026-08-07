@@ -1,0 +1,205 @@
+name: gate
+
+# Why this exists: every other guarantee in this kit lives inside the Claude
+# Code harness. Push from a plain terminal, or run an agent with hooks
+# misconfigured, and nothing checks anything. CI is the layer that does not
+# trust the agent to be honest - it re-runs the proof itself.
+#
+# Deliberately mirrors Gate 2's five checks, mechanically where possible.
+
+on:
+  pull_request:
+  push:
+    branches: [main, master]
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Machinery is alive
+        # The failure this kit already had: hooks silently no-opping.
+        run: |
+          python3 -c "import json;json.load(open('.claude/settings.json'))"
+          python3 -c "import json;json.load(open('.claude/config.json'))"
+          for f in .claude/hooks/*.py .claude/watchdog.py; do
+            python3 -c "import ast,sys;ast.parse(open(sys.argv[1]).read())" "$f"
+          done
+          if grep -q '"command": "python ' .claude/settings.json; then
+            echo "::error::settings.json calls 'python' not 'python3' - hooks will silently no-op on macOS and most Linux"
+            exit 1
+          fi
+
+      - name: Hooks still block what they claim to block
+        # A regression here means enforcement quietly weakened. Catch it in CI,
+        # not at 3am.
+        #
+        # NOTE: these hooks return exit 2 BY DESIGN ("blocked"). GitHub runs
+        # every step under `bash -e`, which aborts the step on any non-zero
+        # command - so a bare probe call kills the step with code 2 precisely
+        # WHEN THE HOOK IS WORKING. Every probe therefore runs inside an `if`
+        # condition, which set -e deliberately ignores.
+        run: |
+          fail=0
+          probe_bash() {
+            if echo "{\"tool_input\":{\"command\":\"$1\"}}" \
+               | python3 .claude/hooks/danger_block.py >/dev/null 2>&1; then
+              echo "::error::danger_block no longer blocks: $1"
+              fail=1
+            fi
+          }
+          probe_bash "rm -rf /"
+          probe_bash "rm -r -f build"
+          probe_bash "git push --force origin main"
+          probe_bash "git reset --hard"
+
+          # False-positive guard: a hook that blocks everything is as broken
+          # as one that blocks nothing.
+          if ! echo '{"tool_input":{"command":"git status"}}' \
+               | python3 .claude/hooks/danger_block.py >/dev/null 2>&1; then
+            echo "::error::danger_block now blocks harmless commands"
+            fail=1
+          fi
+
+          mkdir -p tests && touch tests/test_frozen_probe.py
+          if echo '{"tool_name":"Edit","tool_input":{"file_path":"tests/test_frozen_probe.py"}}' \
+             | python3 .claude/hooks/guard_writes.py >/dev/null 2>&1; then
+            echo "::error::guard_writes no longer freezes existing tests"
+            fail=1
+          fi
+          if ! echo '{"tool_name":"Write","tool_input":{"file_path":"src/probe_new.py"}}' \
+               | python3 .claude/hooks/guard_writes.py >/dev/null 2>&1; then
+            echo "::error::guard_writes now blocks ordinary source writes"
+            fail=1
+          fi
+          rm -f tests/test_frozen_probe.py
+
+          if [ "$fail" -ne 0 ]; then exit 1; fi
+          echo "All hook probes behaved correctly."
+
+      - name: Check 1 — diff within cap
+        if: github.event_name == 'pull_request'
+        run: |
+          CAP_LINES=$(python3 -c "import json;print(json.load(open('.claude/config.json'))['diff_cap']['lines'])")
+          CAP_FILES=$(python3 -c "import json;print(json.load(open('.claude/config.json'))['diff_cap']['files'])")
+          BASE="origin/${{ github.base_ref }}"
+          LINES=$(git diff --numstat "$BASE"...HEAD -- . ':!plans' ':!artifacts' \
+                  | awk '{a+=$1;r+=$2} END{print a+r+0}')
+          FILES=$(git diff --name-only "$BASE"...HEAD -- . ':!plans' ':!artifacts' | wc -l)
+          echo "diff: $FILES files, $LINES lines (cap $CAP_FILES / $CAP_LINES)"
+          if [ "$LINES" -gt "$CAP_LINES" ] || [ "$FILES" -gt "$CAP_FILES" ]; then
+            echo "::error::Slice is over the diff cap. Check 1 says split it and gate the pieces."
+            exit 1
+          fi
+
+      - name: Is this the bare kit, or a real project?
+        # The kit ships with an empty tests/ and no source. "Zero tests
+        # collected" must FAIL a project (green with no tests proves
+        # nothing) but must not fail the template before any project
+        # exists. Bootstrap = no test files and no source outside the kit's
+        # own scaffolding.
+        id: mode
+        run: |
+          TESTS=$(find tests -name '*.py' -o -name '*.js' -o -name '*.ts' 2>/dev/null | wc -l)
+          SRC=$(git ls-files \
+                | grep -vE '^(\.claude/|\.github/|templates/|plans/|artifacts/|evals/|tests/|docs/)' \
+                | grep -E '\.(py|js|ts|tsx|go|rs|rb|java)$' | wc -l)
+          if [ "$TESTS" -eq 0 ] && [ "$SRC" -eq 0 ]; then
+            echo "bootstrap=true" >> $GITHUB_OUTPUT
+            echo "::notice::Bare kit detected (no tests, no source). Skipping test and eval checks until the first slice lands."
+          else
+            echo "bootstrap=false" >> $GITHUB_OUTPUT
+            echo "Project mode: $TESTS test file(s), $SRC source file(s)."
+          fi
+
+      - name: Check 3 — tests pass, freshly, and actually ran
+        if: steps.mode.outputs.bootstrap == 'false'
+        env:
+          PYTHONDONTWRITEBYTECODE: "1"
+        run: |
+          CMD=$(python3 -c "import json;print(' '.join(json.load(open('.claude/config.json'))['test_command']))")
+          echo "running: $CMD"
+          set -o pipefail
+          $CMD 2>&1 | tee /tmp/test.out
+          if grep -qE "Ran 0 tests|NO TESTS RAN|collected 0 items" /tmp/test.out; then
+            echo "::error::Source exists but the suite collected zero tests - green here proves nothing"
+            exit 1
+          fi
+
+      - name: Check 3b — evals did not regress
+        if: steps.mode.outputs.bootstrap == 'false'
+        run: |
+          EVAL=$(python3 -c "import json;c=json.load(open('.claude/config.json'));print(' '.join(c['eval_command']) if c.get('eval_command') else '')")
+          if [ -z "$EVAL" ]; then
+            echo "No eval_command configured - skipping. Set it in .claude/config.json once evals/ has a runner, or evals stay archival."
+          else
+            $EVAL
+          fi
+
+      - name: Check 4 — no-slop mechanical subset
+        # The judgment half stays human. These are the items a grep can decide.
+        #
+        # Two self-reference guards, both learned the hard way when this step
+        # flagged its OWN pattern list as a finding:
+        #   - .github is excluded from the scanned diff (workflows are infra).
+        #   - every pattern is written so its literal text cannot match it:
+        #     "[T]ODO" matches the string TODO, but the source line contains
+        #     "[T]ODO", which does not. Do not "tidy" these brackets away.
+        # grep returns 1 when it finds nothing, which is the GOOD case here -
+        # so every grep is wrapped in an `if` rather than left bare, or bash -e
+        # would fail the step on a clean diff.
+        run: |
+          BASE="${{ github.event_name == 'pull_request' && format('origin/{0}', github.base_ref) || 'HEAD~1' }}"
+          if ! git rev-parse --verify "$BASE" >/dev/null 2>&1; then
+            echo "::notice::No comparable base ($BASE) - skipping. First commit on a fresh repo."
+            exit 0
+          fi
+          git diff "$BASE"...HEAD -- . \
+            ':!plans' ':!artifacts' ':!templates' ':!.github' ':!*.md' \
+            | grep '^+' | grep -v '^+++' > /tmp/added.txt || true
+
+          fail=0
+          if grep -nE "[T]ODO|[F]IXME|[X]XX" /tmp/added.txt; then
+            echo "::error::category 9: unresolved TODO/FIXME in the diff"
+            fail=1
+          fi
+          if grep -nE "[c]onsole\.log\(|[d]ebugger;" /tmp/added.txt; then
+            echo "::warning::category 9: possible debug output left in"
+          fi
+          if grep -inE "([a]pi[_-]?key|[s]ecret|[p]assword|[t]oken)[[:space:]]*[:=][[:space:]]*['\"][^'\"]{12,}" /tmp/added.txt; then
+            echo "::error::possible hardcoded secret"
+            fail=1
+          fi
+          exit $fail
+
+      - name: Dependency change requires an architecture amendment
+        # ARCHITECT.md says new assumptions are a PROPOSAL, not a decision.
+        # This makes that mechanical instead of hoping the reviewer notices.
+        if: github.event_name == 'pull_request'
+        run: |
+          BASE="origin/${{ github.base_ref }}"
+          CHANGED=$(git diff --name-only "$BASE"...HEAD \
+            | grep -E "(requirements.*\.txt|pyproject\.toml|package\.json|package-lock\.json|Cargo\.toml|go\.mod)" || true)
+          if [ -n "$CHANGED" ]; then
+            echo "Dependency manifest changed: $CHANGED"
+            if ! git diff --name-only "$BASE"...HEAD | grep -q "ARCHITECT.md"; then
+              echo "::error::Dependencies changed without amending ARCHITECT.md. New dependency = architecture proposal; amend at the gate, never by drift."
+              exit 1
+            fi
+          fi
+
+      - name: Check 5 — shipping proof is attached
+        if: github.event_name == 'pull_request'
+        run: |
+          BASE="origin/${{ github.base_ref }}"
+          if ! git diff --name-only "$BASE"...HEAD | grep -q "artifacts/reviews/"; then
+            echo "::error::No gate record in artifacts/reviews/. Nothing merges unreviewed."
+            exit 1
+          fi
