@@ -29,7 +29,7 @@ import subprocess
 import sys
 
 sys.path.insert(0, str(pathlib.Path(__file__).parent))
-from _notify import ROOT, beat, load_config, notify, read_hook_input  # noqa: E402
+from _notify import ROOT, beat, is_bootstrap, load_config, notify, read_hook_input  # noqa: E402
 
 ATTEMPTS = ROOT / ".claude/.stop_attempts"
 REPLAN = ROOT / ".claude/.replan_needed"
@@ -89,6 +89,15 @@ def main() -> int:
     beat()
     config = load_config()
     timeout = config["test_timeout_seconds"]
+
+    if is_bootstrap(config["tests_dir"]):
+        # Bare kit, no project started - designing/editing the machinery
+        # itself is not a slice claiming "done" against a brief. CI already
+        # exempts this case; the Stop hook now agrees with it.
+        ATTEMPTS.unlink(missing_ok=True)
+        REPLAN.unlink(missing_ok=True)
+        notify("info", "Stop allowed - bare kit, no project started yet", "", config)
+        return 0
 
     tests_dir = ROOT / config["tests_dir"]
     if not tests_dir.is_dir():

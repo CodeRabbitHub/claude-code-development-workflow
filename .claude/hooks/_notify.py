@@ -171,3 +171,23 @@ def read_hook_input() -> dict:
         return json.load(sys.stdin) or {}
     except Exception:
         return {}
+
+
+SOURCE_EXTS = (".py", ".js", ".ts", ".tsx", ".go", ".rs", ".rb", ".java")
+EXCLUDED_PREFIXES = (".claude/", ".github/", "templates/", "plans/",
+                     "artifacts/", "evals/", "tests/", "docs/")
+
+
+def is_bootstrap(tests_dir: str) -> bool:
+    """True when this is the bare kit - no tests, no project source yet -
+    not a real project. Mirrors gate.yml's bootstrap check so the Stop hook
+    and CI agree on when verification even applies."""
+    tests_path = ROOT / tests_dir
+    if tests_path.is_dir() and any(
+            path for ext in (".py", ".js", ".ts") for path in tests_path.rglob(f"*{ext}")):
+        return False
+    tracked = git("ls-files").splitlines()
+    has_source = any(
+        path.endswith(SOURCE_EXTS) and not path.startswith(EXCLUDED_PREFIXES)
+        for path in tracked)
+    return not has_source
