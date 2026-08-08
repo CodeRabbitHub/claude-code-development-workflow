@@ -93,7 +93,7 @@ For unattended runs, also:
 
 ```bash
 export NTFY_TOPIC=<something-unguessable>   # install the ntfy app, subscribe
-python3 .claude/watchdog.py                 # second terminal: the deadman switch
+python .claude/watchdog.py                  # second terminal: the deadman switch
 ```
 
 ## What's wired up out of the box
@@ -139,15 +139,10 @@ working in a plain terminal:
 
 - **Different test runner?** Set `test_command` in `.claude/config.json`.
   That's the only place it lives.
-- **Windows?** Hooks are invoked with `python3` in `.claude/settings.json`.
-  On macOS and modern Linux this is the only safe choice (`python` either
-  doesn't exist or points at Python 2, and command-not-found returns 127,
-  making every hook silently no-op). On **Windows** the opposite is true:
-  `python3` doesn't exist — the binary is `python` (and it is always
-  Python 3). Run `python .claude/hooks/session_start.py` to verify, then
-  replace every `"python3 .claude/hooks/` with `"python .claude/hooks/`
-  in `.claude/settings.json`. The CI runs on `ubuntu-latest` and still
-  uses `python3`; this change is local only.
+- **Hooks use `python`, not `python3`.** Python 2 is 6+ years past EOL;
+  on every major platform `python` is Python 3. `session_start.py` checks
+  the version at startup as a safety net. CI (`gate.yml`) uses `python3`
+  explicitly because `ubuntu-latest` guarantees it.
 - **Adding an eval suite?** Set `eval_command` and it becomes gating: both
   `stop_verify` and CI run it, and a regression blocks the merge. Keep it off
   push-triggered CI — evals cost money and are non-deterministic, so they

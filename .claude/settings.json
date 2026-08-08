@@ -1,19 +1,19 @@
 {
-  "_comment": "python3, not python — on macOS and Linux. macOS has shipped no `python` since 12.3 and most modern Linux distros ship none either; command-not-found returns 127, which is not 2, so EVERY hook silently no-ops. On WINDOWS the opposite holds: `python3` does not exist, the binary is `python` (always 3). Windows users: replace `python3` with `python` in every command below. CI runs on ubuntu-latest and still uses python3.",
+  "_comment": "Hooks use `python`, not `python3`. Python 2 is 6+ years past EOL; on every major platform in 2026 `python` is Python 3. session_start.py checks the version at session start as a safety net. CI (gate.yml) uses `python3` explicitly because ubuntu-latest guarantees it.",
 
   "hooks": {
     "PreToolUse": [
       {
         "matcher": "Bash|PowerShell",
         "hooks": [
-          { "type": "command", "command": "python3 .claude/hooks/danger_block.py" }
+          { "type": "command", "command": "python .claude/hooks/danger_block.py" }
         ]
       },
       {
         "_comment": "The hole in v1: enforcement covered Bash only, so the agent could edit its own tests to make them pass, and edit its own hooks to stop being governed.",
         "matcher": "Write|Edit|MultiEdit|NotebookEdit",
         "hooks": [
-          { "type": "command", "command": "python3 .claude/hooks/guard_writes.py" }
+          { "type": "command", "command": "python .claude/hooks/guard_writes.py" }
         ]
       }
     ],
@@ -22,7 +22,7 @@
       {
         "matcher": "Bash|PowerShell",
         "hooks": [
-          { "type": "command", "command": "python3 .claude/hooks/capture_commit.py" }
+          { "type": "command", "command": "python .claude/hooks/capture_commit.py" }
         ]
       }
     ],
@@ -30,7 +30,7 @@
     "Stop": [
       {
         "hooks": [
-          { "type": "command", "command": "python3 .claude/hooks/stop_verify.py" }
+          { "type": "command", "command": "python .claude/hooks/stop_verify.py" }
         ]
       }
     ],
@@ -39,7 +39,7 @@
       {
         "_comment": "Fires when the agent needs permission or input. This is the gate reaching your phone at 3am instead of the run idling until morning.",
         "hooks": [
-          { "type": "command", "command": "python3 .claude/hooks/notify_gate.py" }
+          { "type": "command", "command": "python .claude/hooks/notify_gate.py" }
         ]
       }
     ],
@@ -47,7 +47,7 @@
     "SessionStart": [
       {
         "hooks": [
-          { "type": "command", "command": "python3 .claude/hooks/session_start.py" }
+          { "type": "command", "command": "python .claude/hooks/session_start.py" }
         ]
       }
     ]

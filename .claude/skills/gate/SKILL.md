@@ -20,7 +20,12 @@ cheap filter for the next.
    version), and append a row. A drop blocks the merge. If the model
    version changed since the baseline, say so — that is a different finding
    from a regression you caused.
-4. CHECK 4 — no-slop. Dispatch the no-slop-reviewer subagent on the diff.
+4. CHECK 4 — no-slop. Before dispatching the reviewer:
+   a. Capture the diff: `git diff <base>...HEAD` (full output).
+   b. Capture the done-check output from check 3 above.
+   c. Dispatch the no-slop-reviewer subagent, including in its prompt:
+      the path to the brief, the full diff output, and the done-check
+      output. The reviewer has no Bash — it cannot fetch these itself.
    Fix mechanical findings; present judgment findings to the user. No
    unresolved findings may remain.
 5. CHECK 5 — shipping proof. Demonstrate it works in reality, not just in

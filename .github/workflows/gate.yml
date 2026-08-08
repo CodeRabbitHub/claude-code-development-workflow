@@ -32,8 +32,11 @@ jobs:
           for f in .claude/hooks/*.py .claude/watchdog.py; do
             python3 -c "import ast,sys;ast.parse(open(sys.argv[1]).read())" "$f"
           done
-          if grep -q '"command": "python ' .claude/settings.json; then
-            echo "::error::settings.json calls 'python' not 'python3' - hooks will silently no-op on macOS and most Linux"
+          if grep -q '"command": "python3 ' .claude/settings.json; then
+            echo "::warning::settings.json uses 'python3' instead of 'python' - hooks will fail on Windows where python3 does not exist"
+          fi
+          if grep -qE '"command": "python2 ' .claude/settings.json; then
+            echo "::error::settings.json calls 'python2' - hooks must use 'python' (Python 3)"
             exit 1
           fi
 

@@ -98,7 +98,7 @@ state.
 Set `test_command` in `.claude/config.json` for your stack before anything
 else — hooks and CI both read it, and `stop_verify` fails closed, so a wrong
 command blocks every "done" until it is fixed. For unattended runs, export
-`NTFY_TOPIC` (or `NOTIFY_WEBHOOK`) and start `python3 .claude/watchdog.py`
+`NTFY_TOPIC` (or `NOTIFY_WEBHOOK`) and start `python .claude/watchdog.py`
 in a second terminal.
 
 1. **PLAN.md** — the problem, who it's for, milestones in order. Milestones
@@ -337,10 +337,10 @@ that duplication was the one place this kit used to break its own
 single-source-of-truth rule.
 
 **Hooks** (scripts the harness runs automatically — rules as machinery, not
-memory). All are invoked with `python3`, never `python`: macOS has shipped no
-`python` since 12.3, and command-not-found returns 127, which no harness
-treats as a block — so a `python` invocation makes every hook silently
-no-op while the transcript looks identical to enforcement working.
+memory). All are invoked with `python` (not `python3`): Python 2 is 6+ years
+past EOL and `python` is Python 3 on every major platform in 2026.
+`session_start.py` checks the version at startup as a safety net. CI
+(`gate.yml`) uses `python3` explicitly because `ubuntu-latest` guarantees it.
 
 | Hook | Fires | Does |
 |---|---|---|
