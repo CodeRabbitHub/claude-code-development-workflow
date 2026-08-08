@@ -125,7 +125,11 @@ def main() -> int:
         "Ran 0 tests", "NO TESTS RAN",          # unittest
         "collected 0 items", "no tests ran"))    # pytest
 
-    if passed and ran_nothing:
+    if ran_nothing:
+        # unittest/pytest discover-mode exit non-zero (e.g. unittest: 5) when
+        # nothing is collected - gating this on `passed` meant that case fell
+        # through to the generic "fix the CODE" message below, which is wrong:
+        # nothing is failing, nothing has been written yet.
         return block(
             "CANNOT VERIFY: the suite ran 0 tests, so a green result proves "
             "nothing. Write tests that encode the brief's done-check before "
