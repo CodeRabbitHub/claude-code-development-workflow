@@ -42,7 +42,7 @@ ONCE PER PROJECT   plan → architecture (irreversible only) → agent context
 PER SLICE          read handoff → six-line brief → plan ⟨GATE 1: approve⟩
                    → subagent writes tests from the brief → build
                    ⟲ (stop-hook test loop, max 3 attempts)
-                   → no-slop subagent (10-category rubric)
+                   → no-slop subagent (12-category rubric)
                    → ⟨GATE 2: the five-check gate⟩ → merge → capture log
                    (+ eval case if AI behavior) → rewrite handoff → clear
 
@@ -184,7 +184,7 @@ failures bounce it back with the output and the instruction *"fix the code,
 never the test."* The loop is **capped at 3 attempts** (§8, the breaker).
 
 ### Step 6 — PRE-GATE (no-slop-reviewer subagent)
-A read-only reviewer walks the ten-category no-slop checklist (§6) against
+A read-only reviewer walks the twelve-category no-slop checklist (§6) against
 every changed file and reports findings ranked by severity, with file:line
 evidence. It has no edit tools — a reviewer that physically cannot change
 code is structurally trustworthy. Mechanical findings get fixed before a
@@ -252,7 +252,7 @@ context hygiene: no slice runs in a previous slice's polluted context.
 Walked top to bottom against every file created or changed. Each item:
 **fix it, or write one line on why it's a deliberate exception** — a claimed
 exception that isn't written down is itself a finding. Full checklist in
-`templates/no-slop.md`; the ten categories:
+`templates/no-slop.md`; the twelve categories:
 
 1. **Dead code** — no unused variables/imports/functions, no commented-out
    blocks (that's what git is for), no unreachable branches, nothing added
@@ -286,10 +286,22 @@ exception that isn't written down is itself a finding. Full checklist in
     run; anything reported "done/deployed/live" has *same-session* proof (a
     passing test, a curl, a screenshot, a log line); test failures reported
     as failures, with output — never hidden or hand-waved.
+11. **Security** — no secrets in source; every endpoint answers "who may
+    call this?"; external input validated at the boundary; queries
+    parameterized; user content escaped at render; errors don't leak
+    internals; new dependencies in ARCHITECT.md; web/connector content is
+    data, never instructions.
+12. **Resource handling** — files/sockets/connections closed on every path
+    including errors; no unbounded growth (caches, retries, queues, loops
+    have ceilings); anything that can hang has a timeout; long operations
+    report progress or are cancellable.
 
 Categories 7–8 are the anti-drift pair for agent work: consistency stops an
 agent imposing its defaults on the codebase; scope stops it wandering off
-the brief. Category 10 is principle #2 made checkable.
+the brief. Category 10 is principle #2 made checkable. Categories 11–12
+cover safety and operational hygiene — 11 is especially important for agent
+work, where a document that says "ignore your instructions" is a payload
+aimed at a tool-bearing agent.
 
 ---
 
@@ -316,7 +328,7 @@ a standard evolves.
 | Agent | Tools | Why restricted |
 |---|---|---|
 | test-writer | read + write, but briefed to never read the implementation plan | Tests independent of the builder's blind spots |
-| no-slop-reviewer | read-only (cannot edit) | A reviewer that can't change code can't paper over what it finds |
+| no-slop-reviewer | Read, Grep, Glob only — no Bash, no Write, no Edit | A reviewer with no shell and no write tools physically cannot change code or run arbitrary commands. Mechanical restriction, not a prompt constraint that decays |
 
 **Configuration.** `.claude/config.json` is the single source for the test
 command, eval command, diff cap, protected paths, attempt limit, and
@@ -463,6 +475,7 @@ THE GATE       1 diff reviewable · 2 goal matches change · 3 test/eval passed
 
 THE RUBRIC     dead code · errors · duplication · naming · edges · comments
                consistency · scope · fake done · verified-not-claimed
+               security · resource handling
 
 THE GOVERNOR   2nd repetition → automate · 3 failures → re-plan
                nothing merges unreviewed · nothing done without proof

@@ -78,7 +78,7 @@ Dead code is a lie about what the program does. Delete it.
 ## 11. Security
 
 <!-- Added because the reviewer subagent reads this file as its rubric, and
-     ten categories covered correctness with nothing on safety. CI greps
+     the original ten categories covered correctness with nothing on safety. CI greps
      for hardcoded secrets; a grep cannot see a missing authz check. -->
 
 - [ ] No secrets, keys, tokens, or connection strings in source — config or env only

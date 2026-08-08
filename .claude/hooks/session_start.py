@@ -22,6 +22,12 @@ def main() -> int:
     config = load_config()
     problems = []
 
+    if sys.version_info[0] < 3:
+        problems.append("RUNNING UNDER PYTHON 2 — hooks are invoked with "
+                        "the wrong binary. On macOS/Linux use python3; on "
+                        "Windows use python (which is always 3). Fix the "
+                        "command in .claude/settings.json.")
+
     hooks_dir = ROOT / ".claude/hooks"
     for name in REQUIRED:
         if not (hooks_dir / name).exists():
@@ -50,3 +56,4 @@ def main() -> int:
 
 if __name__ == "__main__":
     sys.exit(main())
+

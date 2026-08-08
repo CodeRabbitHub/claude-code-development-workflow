@@ -1,5 +1,5 @@
 {
-  "_comment": "python3, not python. macOS has shipped no `python` since 12.3 and most modern Linux distros ship none either; command-not-found returns 127, which is not 2, so EVERY hook silently no-ops and the transcript looks identical to enforcement working. That single word was the difference between a governed agent and an ungoverned one.",
+  "_comment": "python3, not python — on macOS and Linux. macOS has shipped no `python` since 12.3 and most modern Linux distros ship none either; command-not-found returns 127, which is not 2, so EVERY hook silently no-ops. On WINDOWS the opposite holds: `python3` does not exist, the binary is `python` (always 3). Windows users: replace `python3` with `python` in every command below. CI runs on ubuntu-latest and still uses python3.",
 
   "hooks": {
     "PreToolUse": [

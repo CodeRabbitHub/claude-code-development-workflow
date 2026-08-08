@@ -113,7 +113,7 @@ python3 .claude/watchdog.py                 # second terminal: the deadman switc
 | Agent | Why it's restricted |
 |---|---|
 | test-writer | Never reads the implementation plan, so tests are independent of the builder's blind spots |
-| no-slop-reviewer | Read-only — a reviewer that can't change code can't paper over what it finds |
+| no-slop-reviewer | Read, Grep, Glob only — no Bash, no Write, no Edit. A reviewer that physically cannot change code or run commands is mechanically trustworthy |
 
 **Hooks** — the enforcement layer, invoked automatically:
 
@@ -138,9 +138,16 @@ working in a plain terminal:
 ## Adapting it
 
 - **Different test runner?** Set `test_command` in `.claude/config.json`.
-  That's the only place it lives. (Hooks are invoked with `python3` — never
-  change this to `python`, which doesn't exist on macOS or most modern Linux
-  and would make every hook silently no-op while still looking like it works.)
+  That's the only place it lives.
+- **Windows?** Hooks are invoked with `python3` in `.claude/settings.json`.
+  On macOS and modern Linux this is the only safe choice (`python` either
+  doesn't exist or points at Python 2, and command-not-found returns 127,
+  making every hook silently no-op). On **Windows** the opposite is true:
+  `python3` doesn't exist — the binary is `python` (and it is always
+  Python 3). Run `python .claude/hooks/session_start.py` to verify, then
+  replace every `"python3 .claude/hooks/` with `"python .claude/hooks/`
+  in `.claude/settings.json`. The CI runs on `ubuntu-latest` and still
+  uses `python3`; this change is local only.
 - **Adding an eval suite?** Set `eval_command` and it becomes gating: both
   `stop_verify` and CI run it, and a regression blocks the merge. Keep it off
   push-triggered CI — evals cost money and are non-deterministic, so they
