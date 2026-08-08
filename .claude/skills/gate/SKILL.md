@@ -32,3 +32,9 @@ cheap filter for the next.
 7. Save to artifacts/reviews/YYYY-MM-DD-<slug>.md. Only a written "accept"
    verdict with all five checks green allows commit/merge. Reject or
    accept-with-changes → do the changes → re-gate the new diff.
+8. Merge THROUGH the pull request, never around it: push the slice branch,
+   open a PR (`gh pr create --fill`), and stop. The user's approval on
+   GitHub is the gate's signature — the notify hook has already pushed the
+   gate to their phone, and GitHub mobile is where they approve from bed.
+   Never merge locally to main and push; the ruleset will refuse it, and
+   working around the ruleset is working around the gate.

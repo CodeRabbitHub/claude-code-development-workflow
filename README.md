@@ -78,8 +78,16 @@ cd my-project && rm -rf .git && git init
 3. Set `test_command` in **`.claude/config.json`** for your stack. Hooks and
    CI both read it; `stop_verify` fails closed, so a wrong command blocks
    every "done" until it's fixed.
-4. Commit, open Claude Code, and run **`/brief`** to write the first slice.
-5. Follow the loop in [WORKFLOW.md](WORKFLOW.md).
+4. Put your GitHub handle in **`.github/CODEOWNERS`**, then turn the human
+   gate into a GitHub rule (~2 min): repo Settings → Rules → Rulesets →
+   New branch ruleset targeting `main` → enable **Require a pull request
+   before merging** (1 approval + *Require review from Code Owners* +
+   *Dismiss stale approvals*), **Require status checks to pass** (add
+   `gate`), and **Block force pushes**. Without this, "reviewed" is a file
+   the agent can write; with it, "reviewed" is an approval only you can
+   click — CI fails a real project that skips this step.
+5. Commit, open Claude Code, and run **`/brief`** to write the first slice.
+6. Follow the loop in [WORKFLOW.md](WORKFLOW.md).
 
 For unattended runs, also:
 
@@ -125,6 +133,7 @@ working in a plain terminal:
 |---|---|
 | `.claude/watchdog.py` | Deadman switch — pages you on silence, which no hook can report |
 | `.github/workflows/gate.yml` | Re-runs the gate on a clean machine and asserts the hooks still block what they claim. Holds **no API keys** by design |
+| `.github/CODEOWNERS` + branch ruleset | The human gate GitHub enforces: nothing merges to `main` without an approval from a listed human. CI checks the ruleset exists and fails a project running without it |
 
 ## Adapting it
 

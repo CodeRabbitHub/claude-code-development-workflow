@@ -1,0 +1,94 @@
+diff --git a/.claude/skills/gate/SKILL.md b/.claude/skills/gate/SKILL.md
+index f92b93c..43abf8a 100644
+--- a/.claude/skills/gate/SKILL.md
++++ b/.claude/skills/gate/SKILL.md
+@@ -32,3 +32,9 @@ cheap filter for the next.
+ 7. Save to artifacts/reviews/YYYY-MM-DD-<slug>.md. Only a written "accept"
+    verdict with all five checks green allows commit/merge. Reject or
+    accept-with-changes → do the changes → re-gate the new diff.
++8. Merge THROUGH the pull request, never around it: push the slice branch,
++   open a PR (`gh pr create --fill`), and stop. The user's approval on
++   GitHub is the gate's signature — the notify hook has already pushed the
++   gate to their phone, and GitHub mobile is where they approve from bed.
++   Never merge locally to main and push; the ruleset will refuse it, and
++   working around the ruleset is working around the gate.
+diff --git a/.github/CODEOWNERS b/.github/CODEOWNERS
+new file mode 100644
+index 0000000..86b986a
+--- /dev/null
++++ b/.github/CODEOWNERS
+@@ -0,0 +1,12 @@
++# Gate 2's signature, enforced by GitHub instead of by trust.
++#
++# CI can verify a review RECORD exists in artifacts/reviews/ - it cannot
++# verify a human wrote it. The only thing that can is GitHub itself: a
++# branch ruleset on main with "Require a pull request before merging" +
++# "Require review from Code Owners" reads THIS file and refuses the merge
++# until someone listed here clicks approve. That click is the human gate.
++#
++# Replace the placeholder with your handle at Phase 0. This file lives in
++# .github/, which is a protected path - the agent cannot edit the list of
++# humans allowed to approve its own work.
++* @YOUR-GITHUB-USERNAME
+diff --git a/.github/workflows/gate.yml b/.github/workflows/gate.yml
+index cdbd5f5..c98affb 100644
+--- a/.github/workflows/gate.yml
++++ b/.github/workflows/gate.yml
+@@ -139,6 +139,26 @@ jobs:
+             echo "Project mode: $TESTS test file(s), $SRC source file(s)."
+           fi
+ 
++      - name: Human gate is enforced by GitHub, not by trust
++        # CI can prove a review record EXISTS; only a branch ruleset can
++        # prove a HUMAN approved. This step makes that setup self-policing:
++        # a real project taking a direct push to main either has no
++        # required-PR rule (Gate 2 is self-attested - fail with the fix) or
++        # an admin bypassed one (warn, and say so in the slice log). The
++        # bare template is exempt so the very first push doesn't strand you.
++        if: github.event_name == 'push' && steps.mode.outputs.bootstrap == 'false'
++        env:
++          GH_TOKEN: ${{ github.token }}
++        run: |
++          RULES=$(gh api "repos/${{ github.repository }}/rules/branches/${{ github.ref_name }}" --jq '[.[].type]' 2>/dev/null || echo '[]')
++          echo "active rules on ${{ github.ref_name }}: $RULES"
++          if echo "$RULES" | grep -q '"pull_request"'; then
++            echo "::warning::Direct push to ${{ github.ref_name }} bypassed the required-PR rule (admin bypass?). The human gate did not run for this merge - name it in the slice log."
++          else
++            echo "::error::No required-pull-request rule protects ${{ github.ref_name }}, so Gate 2 is self-attested: the agent can write its own review record and merge. Fix (~2 min): repo Settings -> Rules -> Rulesets -> New branch ruleset -> target ${{ github.ref_name }} -> enable 'Require a pull request before merging' (1 approval, 'Require review from Code Owners', 'Dismiss stale approvals'), 'Require status checks to pass' (add: gate), and 'Block force pushes'. Then put your handle in .github/CODEOWNERS."
++            exit 1
++          fi
++
+       - name: Check 3 — tests pass, freshly, and actually ran
+         if: steps.mode.outputs.bootstrap == 'false'
+         env:
+diff --git a/README.md b/README.md
+index 0e11c79..a1556cf 100644
+--- a/README.md
++++ b/README.md
+@@ -78,8 +78,16 @@ cd my-project && rm -rf .git && git init
+ 3. Set `test_command` in **`.claude/config.json`** for your stack. Hooks and
+    CI both read it; `stop_verify` fails closed, so a wrong command blocks
+    every "done" until it's fixed.
+-4. Commit, open Claude Code, and run **`/brief`** to write the first slice.
+-5. Follow the loop in [WORKFLOW.md](WORKFLOW.md).
++4. Put your GitHub handle in **`.github/CODEOWNERS`**, then turn the human
++   gate into a GitHub rule (~2 min): repo Settings → Rules → Rulesets →
++   New branch ruleset targeting `main` → enable **Require a pull request
++   before merging** (1 approval + *Require review from Code Owners* +
++   *Dismiss stale approvals*), **Require status checks to pass** (add
++   `gate`), and **Block force pushes**. Without this, "reviewed" is a file
++   the agent can write; with it, "reviewed" is an approval only you can
++   click — CI fails a real project that skips this step.
++5. Commit, open Claude Code, and run **`/brief`** to write the first slice.
++6. Follow the loop in [WORKFLOW.md](WORKFLOW.md).
+ 
+ For unattended runs, also:
+ 
+@@ -125,6 +133,7 @@ working in a plain terminal:
+ |---|---|
+ | `.claude/watchdog.py` | Deadman switch — pages you on silence, which no hook can report |
+ | `.github/workflows/gate.yml` | Re-runs the gate on a clean machine and asserts the hooks still block what they claim. Holds **no API keys** by design |
++| `.github/CODEOWNERS` + branch ruleset | The human gate GitHub enforces: nothing merges to `main` without an approval from a listed human. CI checks the ruleset exists and fails a project running without it |
+ 
+ ## Adapting it
+ 

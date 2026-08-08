@@ -1,0 +1,12 @@
+# Gate 2's signature, enforced by GitHub instead of by trust.
+#
+# CI can verify a review RECORD exists in artifacts/reviews/ - it cannot
+# verify a human wrote it. The only thing that can is GitHub itself: a
+# branch ruleset on main with "Require a pull request before merging" +
+# "Require review from Code Owners" reads THIS file and refuses the merge
+# until someone listed here clicks approve. That click is the human gate.
+#
+# Replace the placeholder with your handle at Phase 0. This file lives in
+# .github/, which is a protected path - the agent cannot edit the list of
+# humans allowed to approve its own work.
+* @YOUR-GITHUB-USERNAME

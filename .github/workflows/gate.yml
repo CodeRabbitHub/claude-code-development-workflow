@@ -139,6 +139,26 @@ jobs:
             echo "Project mode: $TESTS test file(s), $SRC source file(s)."
           fi
 
+      - name: Human gate is enforced by GitHub, not by trust
+        # CI can prove a review record EXISTS; only a branch ruleset can
+        # prove a HUMAN approved. This step makes that setup self-policing:
+        # a real project taking a direct push to main either has no
+        # required-PR rule (Gate 2 is self-attested - fail with the fix) or
+        # an admin bypassed one (warn, and say so in the slice log). The
+        # bare template is exempt so the very first push doesn't strand you.
+        if: github.event_name == 'push' && steps.mode.outputs.bootstrap == 'false'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          RULES=$(gh api "repos/${{ github.repository }}/rules/branches/${{ github.ref_name }}" --jq '[.[].type]' 2>/dev/null || echo '[]')
+          echo "active rules on ${{ github.ref_name }}: $RULES"
+          if echo "$RULES" | grep -q '"pull_request"'; then
+            echo "::warning::Direct push to ${{ github.ref_name }} bypassed the required-PR rule (admin bypass?). The human gate did not run for this merge - name it in the slice log."
+          else
+            echo "::error::No required-pull-request rule protects ${{ github.ref_name }}, so Gate 2 is self-attested: the agent can write its own review record and merge. Fix (~2 min): repo Settings -> Rules -> Rulesets -> New branch ruleset -> target ${{ github.ref_name }} -> enable 'Require a pull request before merging' (1 approval, 'Require review from Code Owners', 'Dismiss stale approvals'), 'Require status checks to pass' (add: gate), and 'Block force pushes'. Then put your handle in .github/CODEOWNERS."
+            exit 1
+          fi
+
       - name: Check 3 — tests pass, freshly, and actually ran
         if: steps.mode.outputs.bootstrap == 'false'
         env:
