@@ -23,7 +23,11 @@ import sys
 import time
 import urllib.request
 
-ROOT = pathlib.Path.cwd()
+# Anchored to this file, NOT to cwd. The audit found that a cwd different
+# from the project root made every relative protected-path prefix miss - an
+# absolute path fell through relative_to() and matched nothing. The hooks
+# live at <root>/.claude/hooks/, so the root is two parents up, always.
+ROOT = pathlib.Path(__file__).resolve().parents[2]
 CONFIG_PATH = ROOT / ".claude/config.json"
 EVENTS = ROOT / ".claude/.events.log"
 HEARTBEAT = ROOT / ".claude/.heartbeat"
@@ -38,7 +42,8 @@ DEFAULTS = {
     "protected": {
         "frozen_after_create": ["tests/"],
         "always": [".claude/hooks/", ".claude/settings.json",
-                   ".claude/config.json", ".env"],
+                   ".claude/settings.local.json", ".claude/config.json",
+                   ".claude/agents/", ".claude/skills/", ".github/", ".env"],
         "unlock_file": ".claude/.unlock",
     },
     "notify": {

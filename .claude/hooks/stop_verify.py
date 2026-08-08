@@ -16,6 +16,12 @@ useful if you find out.
 
 Exit 2 = the agent may not stop; stderr tells it why.
 State (gitignored): .claude/.stop_attempts, .claude/.replan_needed
+
+Known trade-off, on purpose: while .replan_needed exists, stops are
+approved WITHOUT verification - otherwise the agent deadlocks (it may not
+stop, and guard_writes stops it repairing the cause). Breaker state is
+therefore ungoverned state; the session_start hook announces it and /next
+refuses to pop new work until a human clears the flag.
 """
 import os
 import pathlib
@@ -115,7 +121,9 @@ def main() -> int:
 
     output = (result.stdout or "") + (result.stderr or "")
     passed = result.returncode == 0
-    ran_nothing = "Ran 0 tests" in output or "NO TESTS RAN" in output
+    ran_nothing = any(marker in output for marker in (
+        "Ran 0 tests", "NO TESTS RAN",          # unittest
+        "collected 0 items", "no tests ran"))    # pytest
 
     if passed and ran_nothing:
         return block(

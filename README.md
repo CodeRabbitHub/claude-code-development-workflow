@@ -38,14 +38,19 @@ brief → plan ⟨GATE 1⟩ → tests from the brief → build ⟲ → review
 Four properties make this different from a prompt library:
 
 - **Tests are frozen.** They're written from the brief before any code
-  exists, and a hook stops the builder from editing them to make them pass.
-  That single move is what separates code that works from code that looks
-  like it works.
+  exists, and paired hooks stop the builder from changing them to make them
+  pass — whether through the edit tools *or* through the shell (`sed -i`,
+  `tee`, redirects, delete-and-recreate). That single move is what
+  separates code that works from code that looks like it works.
 - **The agent can't grade its own homework.** It can't claim "done" while
   tests fail, *or* while they can't be run at all — a verifier that can't
-  verify must not approve. It can't edit its own hooks, config, or CI
-  workflow. CI re-checks everything on a clean machine and regression-tests
-  the hooks themselves.
+  verify must not approve. Hooks block it from editing its own enforcement
+  machinery — hooks, config, subagent definitions, CI workflow — by tool
+  or by shell. CI re-checks everything on a clean machine and
+  regression-tests the hooks themselves, including every known bypass.
+  Honest scope: hooks are a strong speed bump, not a sandbox — for a truly
+  adversarial or fully unattended agent, the hard boundary is a container
+  or a non-privileged working copy.
 - **It runs unattended.** Gates push to your phone, a queue feeds the next
   slice automatically, and a deadman switch pages you when the agent goes
   *silent* — the one failure nothing else can report, because a dead agent

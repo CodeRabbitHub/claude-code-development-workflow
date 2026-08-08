@@ -15,6 +15,7 @@ once with the last known activity, then goes quiet until the agent revives.
 It also tails .claude/.events.log so a gate or breaker that fired while
 your phone was off still reaches you, and prints a morning digest on exit.
 """
+import os
 import pathlib
 import sys
 import time
@@ -54,8 +55,8 @@ def main() -> int:
 
     print(f"watchdog: watching {ROOT.name}")
     print(f"  heartbeat window {interval}s, pages after {grace}s of silence")
-    print(f"  push configured: ntfy={'yes' if __import__('os').environ.get('NTFY_TOPIC') else 'NO'}"
-          f" webhook={'yes' if __import__('os').environ.get('NOTIFY_WEBHOOK') else 'NO'}")
+    print(f"  push configured: ntfy={'yes' if os.environ.get('NTFY_TOPIC') else 'NO'}"
+          f" webhook={'yes' if os.environ.get('NOTIFY_WEBHOOK') else 'NO'}")
     print("  ctrl-c for the digest\n")
 
     notify("info", "Watchdog started", f"grace {grace}s", config)

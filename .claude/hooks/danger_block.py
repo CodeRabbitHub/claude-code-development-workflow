@@ -11,13 +11,22 @@ embarrassingly `rm -r -f` (separated flags). Fixes here: flags are
 normalized before matching, each command in a pipeline/chain is checked
 separately, and the pattern list covers deletion, history rewriting,
 permissions, credential exfiltration, and pipe-to-shell.
+
+v3 closes the hole the audit found: guard_writes freezes tests and the
+governor against the Write/Edit TOOLS, but the shell could still do the
+same damage - `sed -i` a frozen test, `tee` over config.json, `rm` a test
+and recreate it weakened, or `touch .claude/.unlock` to grant itself the
+human-only escape hatch. Protected-path prefixes are now read from
+.claude/config.json (same source guard_writes uses - one list, two
+enforcers) and common shell write verbs against them are blocked. Still a
+speed bump against a determined adversary; a container is the boundary.
 """
 import re
 import sys
 import pathlib
 
 sys.path.insert(0, str(pathlib.Path(__file__).parent))
-from _notify import notify, read_hook_input  # noqa: E402
+from _notify import beat, load_config, notify, read_hook_input  # noqa: E402
 
 PATTERNS = [
     # --- deletion ---
@@ -67,6 +76,51 @@ PATTERNS = [
     (r"\b(shutdown|reboot|halt)\b", "host power state"),
 ]
 
+
+# A path prefix must not match mid-word: "tests" must hit `tests/x.py` and
+# `./tests` and `/abs/path/tests/x.py`, but never "mytests" or "tests_old".
+def _anchor(prefix: str) -> str:
+    escaped = re.escape(prefix.rstrip("/"))
+    return rf"(?<![\w.-]){escaped}(/|\s|$)"
+
+
+def protected_bash_patterns(config: dict) -> list:
+    """Shell-write patterns for every protected path, built from config.
+
+    Same single source of truth guard_writes reads. Covers the common write
+    verbs; anything exotic (python -c, ed, patch) is out of scope for a
+    speed bump. `cp/mv` also trigger when a protected path is the SOURCE -
+    that is a deliberate false positive: renaming a frozen test out of the
+    way is the delete-and-recreate bypass wearing a different hat.
+    """
+    protected = config.get("protected", {})
+    unlock = protected.get("unlock_file", ".claude/.unlock")
+    prefixes = (list(protected.get("always", []))
+                + list(protected.get("frozen_after_create", []))
+                + [unlock])
+    patterns = []
+    for prefix in prefixes:
+        target = _anchor(prefix)
+        why = f"shell write to protected path {prefix}"
+        patterns += [
+            (rf"(^|[^\w./-])(sed|perl)\s+(-\S+\s+)*-\S*i\S*\s+[^|;&]*{target}",
+             f"in-place edit: {why}"),
+            (rf"\btee\b[^|;&]*\s{target}", f"tee: {why}"),
+            (rf"\d?>>?\s*\S*?{target}", f"redirect: {why}"),
+            (rf"\b(mv|cp|rsync|install|ln)\b[^|;&]*\s{target}",
+             f"copy/move/link: {why}"),
+            (rf"\brm\b[^|;&]*\s{target}",
+             f"delete (enables recreate-weakened): {why}"),
+            (rf"\bgit\s+(mv|rm|checkout|restore)\b[^|;&]*\s{target}",
+             f"git rewrite of: {why}"),
+            (rf"\b(truncate|shred)\b[^|;&]*\s{target}", f"truncate: {why}"),
+        ]
+    patterns.append((
+        rf"\btouch\b[^|;&]*\s(\S*/)?{re.escape(unlock)}(\s|$)",
+        "agent creating its own unlock file - that consent is the human's"))
+    return patterns
+
+
 SPLIT = re.compile(r"\|\||&&|[;\n|]")
 
 
@@ -77,13 +131,15 @@ def normalize(segment: str) -> str:
 
 def main() -> int:
     data = read_hook_input()
+    beat()
     command = (data.get("tool_input") or {}).get("command", "") or ""
+    patterns = PATTERNS + protected_bash_patterns(load_config())
 
     for segment in [command] + SPLIT.split(command):
         candidate = normalize(segment)
         if not candidate:
             continue
-        for pattern, why in PATTERNS:
+        for pattern, why in patterns:
             if re.search(pattern, candidate, re.IGNORECASE):
                 notify("blocked", "Dangerous command blocked", f"{why}: {candidate[:200]}")
                 print(

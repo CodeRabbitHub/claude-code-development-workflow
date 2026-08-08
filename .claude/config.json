@@ -22,11 +22,14 @@
     "always": [
       ".claude/hooks/",
       ".claude/settings.json",
+      ".claude/settings.local.json",
       ".claude/config.json",
+      ".claude/agents/",
+      ".claude/skills/",
       ".github/",
       ".env"
     ],
-    "_always_comment": "The governor may not edit itself. .github/ is here because CI is the only check that runs outside the agent's reach - an agent that can rewrite the workflow can delete its own gate. It also becomes an exfiltration path the moment a repo secret exists (e.g. ANTHROPIC_API_KEY for evals): the workflow runs on GitHub's runner, where danger_block cannot see it.",
+    "_always_comment": "The governor may not edit itself. .github/ is here because CI is the only check that runs outside the agent's reach - an agent that can rewrite the workflow can delete its own gate. It also becomes an exfiltration path the moment a repo secret exists (e.g. ANTHROPIC_API_KEY for evals): the workflow runs on GitHub's runner, where danger_block cannot see it. agents/ and skills/ are here since v3: a reviewer subagent the builder can rewrite into a rubber stamp is not a reviewer, and settings.local.json is an unprotected side door into the same harness config. Promotion edits to these go through the unlock, one human touch each. Residual, accepted: templates/ (incl. no-slop.md) stays writable because the ratchet's whole point is that the agent proposes template improvements - the human gate reviews those diffs.",
     "unlock_file": ".claude/.unlock",
     "_unlock_comment": "To amend a frozen test: human runs `touch .claude/.unlock` (or writes a path prefix into it), agent makes the change, hook consumes and deletes the unlock. Every unlock is logged to .claude/.events.log and must be named in the slice log."
   },

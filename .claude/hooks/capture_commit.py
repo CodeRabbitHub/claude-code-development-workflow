@@ -19,7 +19,7 @@ import re
 import sys
 
 sys.path.insert(0, str(pathlib.Path(__file__).parent))
-from _notify import beat, git, load_config, notify, read_hook_input  # noqa: E402
+from _notify import ROOT, beat, git, load_config, notify, read_hook_input  # noqa: E402
 
 COMMIT = re.compile(r"(^|[;&|]\s*)git\s+(-\S+\s+)*commit\b")
 
@@ -37,7 +37,7 @@ def main() -> int:
         return 0
     sha, timestamp, subject = (head.strip().split("|", 2) + ["", ""])[:3]
 
-    marker = pathlib.Path(".claude/.last_capture")
+    marker = ROOT / ".claude/.last_capture"
     if marker.exists() and marker.read_text("utf-8").strip() == sha:
         return 0  # same commit already captured; no phantom entries
     marker.write_text(sha, encoding="utf-8")
@@ -56,7 +56,7 @@ def main() -> int:
     cap = config["diff_cap"]
     over = added + removed > cap["lines"] or files > cap["files"]
 
-    log_dir = pathlib.Path("plans/logs")
+    log_dir = ROOT / "plans/logs"
     log_dir.mkdir(parents=True, exist_ok=True)
     stamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
     with (log_dir / "_auto-capture.md").open("a", encoding="utf-8") as handle:

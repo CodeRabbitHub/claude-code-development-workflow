@@ -22,13 +22,19 @@ logs it to .claude/.events.log. A test amended this way must be named in
 the slice log - that is what makes the amendment reviewable instead of
 silent.
 
+This hook governs the Write/Edit TOOLS only. Its shell counterpart is
+danger_block.py, which reads the same protected list from config.json and
+blocks the equivalent Bash writes (sed -i, tee, redirects, rm/mv, touch of
+the unlock file). Weaken either and the other still holds the line; CI
+probes both.
+
 Exit 2 = block the tool call, stderr is fed back to the agent.
 """
 import pathlib
 import sys
 
 sys.path.insert(0, str(pathlib.Path(__file__).parent))
-from _notify import ROOT, load_config, notify, read_hook_input  # noqa: E402
+from _notify import ROOT, beat, load_config, notify, read_hook_input  # noqa: E402
 
 EDIT_TOOLS = {"Edit", "MultiEdit", "NotebookEdit"}
 
@@ -80,6 +86,8 @@ def unlock_covers(config: dict, rel: str) -> bool:
 
 def main() -> int:
     data = read_hook_input()
+    beat()  # file-editing sessions must count as alive too, or the
+            # watchdog pages "dead" while the agent is mid-refactor
     config = load_config()
     protected = config["protected"]
     tool = data.get("tool_name") or data.get("tool") or ""
